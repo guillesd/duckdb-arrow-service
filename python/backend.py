@@ -5,6 +5,7 @@ import pyarrow as pa
 import io
 import datetime
 from decimal import Decimal
+from typing import Generator
 
 ##########################
 ### JSON Serialization ###
@@ -63,43 +64,34 @@ def get_table_stats_arrow_ser(table_name: str):
     """
     with duckdb.connect('../db/database.duckdb') as conn:
         batch_reader = conn.execute(f"SUMMARIZE {table_name}").fetch_record_batch() # This is throwing a weird error
-        arrow_schema = batch_reader.schema
-        with batch_reader as source, \
-            io.BytesIO() as sink, \
-            pa.ipc.new_stream(sink, arrow_schema) as writer:
-            for batch in source:
-                sink.seek(0)
-                writer.write_batch(batch)
-                sink.truncate()
-                with sink.getbuffer() as buffer:
-                    yield buffer
+        return _arrow_reader_to_ipc_stream(batch_reader)
 
-            sink.seek(0)
-            writer.close()
-            sink.truncate()
-            with sink.getbuffer() as buffer:
-                yield buffer
-
-def get_nrows_arrow_ser(table_name: str, nrows: int = 10000):
+def get_nrows_arrow_ser(table_name: str, nrows: int = 10000) -> Generator[io.BytesIO, None, None]:
     """
     Returns a generator that yields Arrow serialized rows for the specified table.
     The generator yields memoryview objects from buffers
     """
     with duckdb.connect('../db/database.duckdb') as conn:
         batch_reader = conn.execute(f"SELECT * FROM {table_name} LIMIT {nrows}").fetch_record_batch()
-        arrow_schema = batch_reader.schema
-        with batch_reader as source, \
-            io.BytesIO() as sink, \
-            pa.ipc.new_stream(sink, arrow_schema) as writer:
-            for batch in source:
-                sink.seek(0)
-                writer.write_batch(batch)
-                sink.truncate()
-                with sink.getbuffer() as buffer:
-                    yield buffer
+        return _arrow_reader_to_ipc_stream(batch_reader)
 
+def _arrow_reader_to_ipc_stream(batch_reader: pa.RecordBatchReader) -> Generator[io.BytesIO, None, None]:
+    """
+    Converts a RecordBatchReader to an IPC stream in a BytesIO buffer.
+    """
+    arrow_schema = batch_reader.schema
+    with batch_reader as source, \
+        io.BytesIO() as sink, \
+        pa.ipc.new_stream(sink, arrow_schema) as writer:
+        for batch in source:
             sink.seek(0)
-            writer.close()
+            writer.write_batch(batch)
             sink.truncate()
             with sink.getbuffer() as buffer:
                 yield buffer
+
+        sink.seek(0)
+        writer.close()
+        sink.truncate()
+        with sink.getbuffer() as buffer:
+            yield buffer

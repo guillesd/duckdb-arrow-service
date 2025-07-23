@@ -28,11 +28,11 @@ def get_table_stats_arrow(table_name: str):
     )
 
 @app.get("/rows/json/{table_name}")
-def get_10k_rows_json(table_name: str, nrows: int = 10000):
+def get_nrows_json(table_name: str, nrows: int = 10000):
     return Response(content=get_nrows_json_ser(table_name, nrows), media_type="application/json")
 
 @app.get("/rows/arrow/{table_name}")
-def get_10k_rows_arrow(table_name: str, nrows: int = 10000):
+def get_nrows_arrow(table_name: str, nrows: int = 10000):
     return StreamingResponse(
         get_nrows_arrow_ser(table_name, nrows),
         media_type="application/vnd.apache.arrow.stream"
