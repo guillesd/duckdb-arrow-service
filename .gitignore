@@ -11,3 +11,4 @@ wheels/
 
 # duckDB generated data
 db/
+tmp/
